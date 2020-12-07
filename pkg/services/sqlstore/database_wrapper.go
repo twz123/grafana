@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/gchaincl/sqlhooks"
@@ -56,7 +57,7 @@ func WrapDatabaseDriverWithHooks(dbType string) string {
 
 	driverWithHooks := dbType + "WithHooks"
 	sql.Register(driverWithHooks, sqlhooks.Wrap(d, &databaseQueryWrapper{log: log.New("sqlstore.metrics")}))
-	core.RegisterDriver(driverWithHooks, &databaseQueryWrapperParser{dbType: dbType})
+	core.RegisterDriver(driverWithHooks, &databaseQueryWrapperDriver{dbType: dbType})
 	return driverWithHooks
 }
 
@@ -100,12 +101,14 @@ func (h *databaseQueryWrapper) OnError(ctx context.Context, err error, query str
 	return err
 }
 
-type databaseQueryWrapperParser struct {
+type databaseQueryWrapperDriver struct {
 	dbType string
 }
 
-func (hp *databaseQueryWrapperParser) Parse(string, string) (*core.Uri, error) {
-	return &core.Uri{
-		DbType: core.DbType(hp.dbType),
-	}, nil
+func (hp *databaseQueryWrapperDriver) Parse(driverName, dataSourceName string) (*core.Uri, error) {
+	driver := core.QueryDriver(hp.dbType)
+	if driver == nil {
+		return nil, fmt.Errorf("could not find driver with name %s", hp.dbType)
+	}
+	return core.QueryDriver(hp.dbType).Parse(driverName, dataSourceName)
 }
